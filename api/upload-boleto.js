@@ -43,14 +43,25 @@ export default async function handler(req, res) {
       throw new Error('Erro ao obter token: ' + loginResponse.status);
     }
 
-    const loginResult = await loginResponse.json();
-    const bearerToken = loginResult.token || loginResult.accessToken || loginResult.access_token;
+    const responseText = await loginResponse.text();
+    console.log('Resposta do login (raw):', responseText);
     
-    if (!bearerToken) {
-      throw new Error('Token não encontrado na resposta: ' + JSON.stringify(loginResult));
+    let bearerToken;
+    
+    // Tenta fazer parse como JSON
+    try {
+      const loginResult = JSON.parse(responseText);
+      bearerToken = loginResult.token || loginResult.accessToken || loginResult.access_token || loginResult;
+    } catch (e) {
+      // Se não for JSON, assume que é o token direto como string
+      bearerToken = responseText.trim().replace(/^"|"$/g, ''); // Remove aspas se houver
+    }
+    
+    if (!bearerToken || bearerToken.length < 10) {
+      throw new Error('Token inválido recebido: ' + bearerToken);
     }
 
-    console.log('✅ Token obtido com sucesso');
+    console.log('✅ Token obtido:', bearerToken.substring(0, 20) + '...');
 
     // 2. Busca o PDF do boleto
     console.log('📄 Buscando PDF do boleto...');

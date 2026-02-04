@@ -1,5 +1,4 @@
 const FormData = require('form-data');
-const crypto = require('crypto');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -17,9 +16,7 @@ export default async function handler(req, res) {
   const { serial, cnpj } = req.body;
 
   const cloudName = 'dvly2ldys';
-  const apiKey = '972741416413585';
-  const apiSecret = 'R_MuqTFp0T8uTO28IeorOuqRF7I';
-  const uploadPreset = 'boleto_api'; // NOME DO PRESET QUE VOCÊ CRIOU
+  const uploadPreset = 'boleto_unsigned'; // PRESET UNSIGNED
 
   if (!serial || !cnpj) {
     return res.status(400).json({ 
@@ -75,28 +72,15 @@ export default async function handler(req, res) {
     const base64 = buffer.toString('base64');
     const dataUri = `data:application/pdf;base64,${base64}`;
 
-    // 4. Assinatura COM upload_preset
-    const timestamp = Math.round(Date.now() / 1000);
-    
-    // String para assinar em ordem alfabética
-    const toSign = `timestamp=${timestamp}&upload_preset=${uploadPreset}${apiSecret}`;
-    const signature = crypto.createHash('sha1').update(toSign).digest('hex');
-
-    console.log('🔐 Upload Preset:', uploadPreset);
-    console.log('🔐 Timestamp:', timestamp);
-    console.log('🔐 String to sign:', toSign.substring(0, 50) + '...');
-    console.log('🔐 Signature:', signature);
-
-    // 5. Upload COM upload_preset
+    // 4. Upload UNSIGNED (sem assinatura)
+    console.log('☁️ Fazendo upload unsigned...');
     const formData = new FormData();
     formData.append('file', dataUri);
-    formData.append('api_key', apiKey);
-    formData.append('timestamp', timestamp);
     formData.append('upload_preset', uploadPreset);
-    formData.append('signature', signature);
+    formData.append('public_id', `boleto_${serial}`);
 
     const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
       {
         method: 'POST',
         body: formData,

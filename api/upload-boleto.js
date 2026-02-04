@@ -1,5 +1,6 @@
+const FormData = require('form-data');
+
 export default async function handler(req, res) {
-  // Permite CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,21 +34,25 @@ export default async function handler(req, res) {
       throw new Error('Erro ao buscar boleto: ' + boletoPdf.status);
     }
 
-    const buffer = await boletoPdf.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
+    const arrayBuffer = await boletoPdf.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    // 2. Upload para Cloudinary
+    // 2. Upload para Cloudinary usando FormData (binário puro)
+    const formData = new FormData();
+    
+    formData.append('file', buffer, {
+      filename: `boleto_${serial}.pdf`,
+      contentType: 'application/pdf'
+    });
+    formData.append('upload_preset', uploadPreset);
+    formData.append('public_id', `boleto_${serial}`);
+
     const cloudinaryResponse = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file: `data:application/pdf;base64,${base64}`,
-          upload_preset: uploadPreset,
-          public_id: `boleto_${serial}`,
-          resource_type: 'raw'
-        })
+        body: formData,
+        headers: formData.getHeaders()
       }
     );
 

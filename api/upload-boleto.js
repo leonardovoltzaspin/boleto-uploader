@@ -44,24 +44,21 @@ export default async function handler(req, res) {
     }
 
     const responseText = await loginResponse.text();
-    console.log('Resposta do login (raw):', responseText);
     
     let bearerToken;
     
-    // Tenta fazer parse como JSON
     try {
       const loginResult = JSON.parse(responseText);
       bearerToken = loginResult.token || loginResult.accessToken || loginResult.access_token || loginResult;
     } catch (e) {
-      // Se não for JSON, assume que é o token direto como string
-      bearerToken = responseText.trim().replace(/^"|"$/g, ''); // Remove aspas se houver
+      bearerToken = responseText.trim().replace(/^"|"$/g, '');
     }
     
     if (!bearerToken || bearerToken.length < 10) {
       throw new Error('Token inválido recebido: ' + bearerToken);
     }
 
-    console.log('✅ Token obtido:', bearerToken.substring(0, 20) + '...');
+    console.log('✅ Token obtido');
 
     // 2. Busca o PDF do boleto
     console.log('📄 Buscando PDF do boleto...');
@@ -86,9 +83,28 @@ export default async function handler(req, res) {
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = `boleto_${serial}`;
     
-    // Adiciona resource_type na assinatura
-    const stringToSign = `public_id=${publicId}&resource_type=raw&timestamp=${timestamp}${apiSecret}`;
+    // Parâmetros que vão na assinatura (ordem alfabética)
+    const paramsToSign = {
+      public_id: publicId,
+      timestamp: timestamp
+    };
+    
+    // String de assinatura em ordem alfabética
+    const paramStrings = Object.keys(paramsToSign)
+      .sort()
+      .map(key => `${key}=${paramsToSign[key]}`)
+      .join('&');
+    
+    const stringToSign = paramStrings + apiSecret;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
+
+    console.log('🔐 Debug assinatura:');
+    console.log('  - Timestamp:', timestamp);
+    console.log('  - Public ID:', publicId);
+    console.log('  - API Key:', apiKey);
+    console.log('  - API Secret (primeiros 10 chars):', apiSecret.substring(0, 10) + '...');
+    console.log('  - String to sign:', stringToSign.substring(0, 50) + '...');
+    console.log('  - Signature:', signature);
 
     // 4. Upload para Cloudinary
     console.log('☁️ Fazendo upload para Cloudinary...');
@@ -102,10 +118,9 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
-    formData.append('resource_type', 'raw');
 
     const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
       {
         method: 'POST',
         body: formData,

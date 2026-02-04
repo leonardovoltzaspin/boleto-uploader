@@ -86,7 +86,8 @@ export default async function handler(req, res) {
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = `boleto_${serial}`;
     
-    const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    // Adiciona resource_type na assinatura
+    const stringToSign = `public_id=${publicId}&resource_type=raw&timestamp=${timestamp}${apiSecret}`;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
 
     // 4. Upload para Cloudinary
@@ -101,9 +102,10 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
+    formData.append('resource_type', 'raw');
 
     const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
       {
         method: 'POST',
         body: formData,
@@ -111,7 +113,11 @@ export default async function handler(req, res) {
       }
     );
 
-    const result = await cloudinaryResponse.json();
+    console.log('📡 Status:', cloudinaryResponse.status);
+    const responseText2 = await cloudinaryResponse.text();
+    console.log('📄 Resposta completa:', responseText2);
+
+    const result = JSON.parse(responseText2);
 
     if (result.secure_url) {
       console.log('✅ Upload bem-sucedido! URL:', result.secure_url);

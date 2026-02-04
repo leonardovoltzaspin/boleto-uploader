@@ -1,4 +1,5 @@
-const cloudinary = require('cloudinary').v2;
+const FormData = require('form-data');
+const crypto = require('crypto');
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,22 +14,20 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { serial, cnpj, cloudName, apiKey, apiSecret } = req.body;
+  const { serial, cnpj } = req.body;
 
-  if (!serial || !cnpj || !cloudName || !apiKey || !apiSecret) {
+  // HARDCODED para teste
+  const cloudName = 'dvly2ldys';
+  const apiKey = '972741416413585';
+  const apiSecret = 'R_MuqTFp0T8uTO28IeorOuqRF7I';
+
+  if (!serial || !cnpj) {
     return res.status(400).json({ 
-      error: 'Parâmetros faltando'
+      error: 'Serial e CNPJ são obrigatórios'
     });
   }
 
   try {
-    // Configurar Cloudinary
-    cloudinary.config({
-      cloud_name: cloudName,
-      api_key: apiKey,
-      api_secret: apiSecret
-    });
-
     // 1. Renovar token
     console.log('🔐 Obtendo novo token...');
     const loginResponse = await fetch(
@@ -50,23 +49,12 @@ export default async function handler(req, res) {
     }
 
     const responseText = await loginResponse.text();
-    let bearerToken;
-    
-    try {
-      const loginResult = JSON.parse(responseText);
-      bearerToken = loginResult.token || loginResult.accessToken || loginResult.access_token || loginResult;
-    } catch (e) {
-      bearerToken = responseText.trim().replace(/^"|"$/g, '');
-    }
-    
-    if (!bearerToken || bearerToken.length < 10) {
-      throw new Error('Token inválido');
-    }
+    let bearerToken = responseText.trim().replace(/^"|"$/g, '');
 
     console.log('✅ Token obtido');
 
     // 2. Buscar PDF
-    console.log('📄 Buscando PDF do boleto...');
+    console.log('📄 Buscando PDF...');
     const boletoPdf = await fetch(
       `http://navarrocloud.ramo.com.br/files/api/Boleto?serial=${serial}&cnpj=${cnpj}`,
       {
@@ -80,28 +68,50 @@ export default async function handler(req, res) {
       throw new Error('Erro ao buscar boleto: ' + boletoPdf.status);
     }
 
-    const arrayBuffer = await boletoPdf.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const buffer = Buffer.from(await boletoPdf.arrayBuffer());
     console.log('✅ PDF baixado:', buffer.length, 'bytes');
 
-    // 3. Upload usando biblioteca oficial
-    console.log('☁️ Fazendo upload para Cloudinary...');
-    
-    const base64File = buffer.toString('base64');
-    const dataUri = `data:application/pdf;base64,${base64File}`;
+    // 3. Base64
+    const base64 = buffer.toString('base64');
+    const dataUri = `data:application/pdf;base64,${base64}`;
 
-    const uploadResult = await cloudinary.uploader.upload(dataUri, {
-      resource_type: 'raw',
-      public_id: `boleto_${serial}`,
-      format: 'pdf'
-    });
+    // 4. Assinatura
+    const timestamp = Math.round(Date.now() / 1000);
+    const signature = crypto
+      .createHash('sha1')
+      .update(`timestamp=${timestamp}${apiSecret}`)
+      .digest('hex');
 
-    console.log('✅ Upload bem-sucedido! URL:', uploadResult.secure_url);
-    
-    return res.status(200).json({ 
-      success: true,
-      url: uploadResult.secure_url 
-    });
+    console.log('🔐 Timestamp:', timestamp);
+    console.log('🔐 Signature:', signature);
+
+    // 5. Upload
+    const formData = new FormData();
+    formData.append('file', dataUri);
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', timestamp);
+    formData.append('signature', signature);
+
+    const cloudinaryResponse = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        headers: formData.getHeaders()
+      }
+    );
+
+    const result = await cloudinaryResponse.json();
+    console.log('📡 Cloudinary response:', result);
+
+    if (result.secure_url) {
+      return res.status(200).json({ 
+        success: true,
+        url: result.secure_url 
+      });
+    }
+
+    throw new Error(JSON.stringify(result));
 
   } catch (error) {
     console.error('❌ ERRO:', error.message);

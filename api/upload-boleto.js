@@ -16,10 +16,10 @@ export default async function handler(req, res) {
 
   const { serial, cnpj } = req.body;
 
-  // HARDCODED para teste
   const cloudName = 'dvly2ldys';
   const apiKey = '972741416413585';
   const apiSecret = 'R_MuqTFp0T8uTO28IeorOuqRF7I';
+  const uploadPreset = 'boleto_api'; // NOME DO PRESET QUE VOCÊ CRIOU
 
   if (!serial || !cnpj) {
     return res.status(400).json({ 
@@ -75,21 +75,24 @@ export default async function handler(req, res) {
     const base64 = buffer.toString('base64');
     const dataUri = `data:application/pdf;base64,${base64}`;
 
-    // 4. Assinatura
+    // 4. Assinatura COM upload_preset
     const timestamp = Math.round(Date.now() / 1000);
-    const signature = crypto
-      .createHash('sha1')
-      .update(`timestamp=${timestamp}${apiSecret}`)
-      .digest('hex');
+    
+    // String para assinar em ordem alfabética
+    const toSign = `timestamp=${timestamp}&upload_preset=${uploadPreset}${apiSecret}`;
+    const signature = crypto.createHash('sha1').update(toSign).digest('hex');
 
+    console.log('🔐 Upload Preset:', uploadPreset);
     console.log('🔐 Timestamp:', timestamp);
+    console.log('🔐 String to sign:', toSign.substring(0, 50) + '...');
     console.log('🔐 Signature:', signature);
 
-    // 5. Upload
+    // 5. Upload COM upload_preset
     const formData = new FormData();
     formData.append('file', dataUri);
     formData.append('api_key', apiKey);
     formData.append('timestamp', timestamp);
+    formData.append('upload_preset', uploadPreset);
     formData.append('signature', signature);
 
     const cloudinaryResponse = await fetch(
@@ -102,9 +105,11 @@ export default async function handler(req, res) {
     );
 
     const result = await cloudinaryResponse.json();
-    console.log('📡 Cloudinary response:', result);
+    console.log('📡 Status:', cloudinaryResponse.status);
+    console.log('📡 Response:', JSON.stringify(result));
 
     if (result.secure_url) {
+      console.log('✅ Sucesso! URL:', result.secure_url);
       return res.status(200).json({ 
         success: true,
         url: result.secure_url 

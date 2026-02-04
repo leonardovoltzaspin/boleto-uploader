@@ -79,17 +79,18 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(arrayBuffer);
     console.log('✅ PDF baixado:', buffer.length, 'bytes');
 
-    // 3. Criar assinatura para upload autenticado
+    // 3. Criar assinatura COM upload_preset
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = `boleto_${serial}`;
+    const uploadPreset = 'boleto_signed'; // <<<< COLOQUE O NOME DO SEU PRESET AQUI
     
     // Parâmetros que vão na assinatura (ordem alfabética)
     const paramsToSign = {
       public_id: publicId,
-      timestamp: timestamp
+      timestamp: timestamp,
+      upload_preset: uploadPreset
     };
     
-    // String de assinatura em ordem alfabética
     const paramStrings = Object.keys(paramsToSign)
       .sort()
       .map(key => `${key}=${paramsToSign[key]}`)
@@ -98,13 +99,7 @@ export default async function handler(req, res) {
     const stringToSign = paramStrings + apiSecret;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
 
-    console.log('🔐 Debug assinatura:');
-    console.log('  - Timestamp:', timestamp);
-    console.log('  - Public ID:', publicId);
-    console.log('  - API Key:', apiKey);
-    console.log('  - API Secret (primeiros 10 chars):', apiSecret.substring(0, 10) + '...');
-    console.log('  - String to sign:', stringToSign.substring(0, 50) + '...');
-    console.log('  - Signature:', signature);
+    console.log('🔐 Usando upload preset:', uploadPreset);
 
     // 4. Upload para Cloudinary
     console.log('☁️ Fazendo upload para Cloudinary...');
@@ -118,6 +113,7 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
+    formData.append('upload_preset', uploadPreset);
 
     const cloudinaryResponse = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
@@ -130,7 +126,7 @@ export default async function handler(req, res) {
 
     console.log('📡 Status:', cloudinaryResponse.status);
     const responseText2 = await cloudinaryResponse.text();
-    console.log('📄 Resposta completa:', responseText2);
+    console.log('📄 Resposta:', responseText2.substring(0, 200));
 
     const result = JSON.parse(responseText2);
 

@@ -59,6 +59,7 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
+    formData.append('resource_type', 'raw');
 
     const cloudinaryResponse = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,

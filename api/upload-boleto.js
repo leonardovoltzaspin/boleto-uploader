@@ -1,86 +1,38 @@
-const FormData = require('form-data');
-
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { serial, cnpj, cloudName, uploadPreset } = req.body;
-
-  // Debug: verificar o que está chegando
-  console.log('Parâmetros recebidos:', { serial, cnpj, cloudName, uploadPreset });
-
-  if (!serial || !cnpj || !cloudName || !uploadPreset) {
-    return res.status(400).json({ 
-      error: 'Parâmetros faltando',
-      received: { serial, cnpj, cloudName, uploadPreset }
-    });
-  }
-
+async function run(serial, cnpj, cloudName, apiKey, apiSecret) {
   try {
-    // 1. Busca o PDF do boleto
-    const boletoPdf = await fetch(
-      `http://navarrocloud.ramo.com.br/files/api/Boleto?serial=${serial}&cnpj=${cnpj}`,
-      {
-        headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzAzMDM4Nzh9.I8qkqlAXM0MhZ-zzcFJj1Cscy2LnnuUX8K5u7frrmhQ'
-        }
-      }
-    );
-
-    if (!boletoPdf.ok) {
-      throw new Error('Erro ao buscar boleto: ' + boletoPdf.status);
-    }
-
-    const arrayBuffer = await boletoPdf.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // 2. Upload para Cloudinary usando FormData
-    const formData = new FormData();
-    
-    formData.append('file', buffer, {
-      filename: `boleto_${serial}.pdf`,
-      contentType: 'application/pdf'
-    });
-    formData.append('upload_preset', uploadPreset);
-    
-    console.log('Upload preset sendo enviado:', uploadPreset);
-
-    const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+    var response = await request.fetchAsync(
+      'https://sua-url.vercel.app/api/upload-boleto',
       {
         method: 'POST',
-        body: formData,
-        headers: formData.getHeaders()
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          serial: serial,
+          cnpj: cnpj,
+          cloudName: cloudName,
+          apiKey: apiKey,
+          apiSecret: apiSecret
+        })
       }
     );
 
-    const result = await cloudinaryResponse.json();
-    
-    console.log('Resposta do Cloudinary:', result);
-
-    if (result.secure_url) {
-      return res.status(200).json({ 
-        success: true,
-        url: result.secure_url 
-      });
-    } else {
-      throw new Error('Upload falhou: ' + JSON.stringify(result));
+    if (!response || response.status !== 200) {
+      throw new Error('Erro: ' + response.status + ' - ' + response.body);
     }
 
-  } catch (error) {
-    console.error('Erro completo:', error);
-    return res.status(500).json({ 
-      success: false,
-      error: error.message 
+    var result = JSON.parse(response.body);
+    
+    if (result.success) {
+      return result.url;
+    } else {
+      throw new Error(result.error);
+    }
+
+  } catch (e) {
+    return JSON.stringify({
+      erro: true,
+      mensagem: e.message
     });
   }
 }

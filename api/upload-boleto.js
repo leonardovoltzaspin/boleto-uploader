@@ -1,5 +1,4 @@
-const FormData = require('form-data');
-const crypto = require('crypto');
+const cloudinary = require('cloudinary').v2;
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,7 +22,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Renovar token automaticamente
+    // Configurar Cloudinary
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret
+    });
+
+    // 1. Renovar token
     console.log('🔐 Obtendo novo token...');
     const loginResponse = await fetch(
       'http://navarrocloud.ramo.com.br/filesV2/api/Login',
@@ -44,7 +50,6 @@ export default async function handler(req, res) {
     }
 
     const responseText = await loginResponse.text();
-    
     let bearerToken;
     
     try {
@@ -55,12 +60,12 @@ export default async function handler(req, res) {
     }
     
     if (!bearerToken || bearerToken.length < 10) {
-      throw new Error('Token inválido recebido: ' + bearerToken);
+      throw new Error('Token inválido');
     }
 
     console.log('✅ Token obtido');
 
-    // 2. Busca o PDF do boleto
+    // 2. Buscar PDF
     console.log('📄 Buscando PDF do boleto...');
     const boletoPdf = await fetch(
       `http://navarrocloud.ramo.com.br/files/api/Boleto?serial=${serial}&cnpj=${cnpj}`,
@@ -79,67 +84,24 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(arrayBuffer);
     console.log('✅ PDF baixado:', buffer.length, 'bytes');
 
-    // 3. Criar assinatura COM upload_preset
-    const timestamp = Math.round(new Date().getTime() / 1000);
-    const publicId = `boleto_${serial}`;
-    const uploadPreset = 'boleto_signed'; // <<<< COLOQUE O NOME DO SEU PRESET AQUI
-    
-    // Parâmetros que vão na assinatura (ordem alfabética)
-    const paramsToSign = {
-      public_id: publicId,
-      timestamp: timestamp,
-      upload_preset: uploadPreset
-    };
-    
-    const paramStrings = Object.keys(paramsToSign)
-      .sort()
-      .map(key => `${key}=${paramsToSign[key]}`)
-      .join('&');
-    
-    const stringToSign = paramStrings + apiSecret;
-    const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
-
-    console.log('🔐 Usando upload preset:', uploadPreset);
-
-    // 4. Upload para Cloudinary
+    // 3. Upload usando biblioteca oficial
     console.log('☁️ Fazendo upload para Cloudinary...');
-    const formData = new FormData();
     
-    formData.append('file', buffer, {
-      filename: `boleto_${serial}.pdf`,
-      contentType: 'application/pdf'
+    const base64File = buffer.toString('base64');
+    const dataUri = `data:application/pdf;base64,${base64File}`;
+
+    const uploadResult = await cloudinary.uploader.upload(dataUri, {
+      resource_type: 'raw',
+      public_id: `boleto_${serial}`,
+      format: 'pdf'
     });
-    formData.append('api_key', apiKey);
-    formData.append('timestamp', timestamp.toString());
-    formData.append('signature', signature);
-    formData.append('public_id', publicId);
-    formData.append('upload_preset', uploadPreset);
 
-    const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-      {
-        method: 'POST',
-        body: formData,
-        headers: formData.getHeaders()
-      }
-    );
-
-    console.log('📡 Status:', cloudinaryResponse.status);
-    const responseText2 = await cloudinaryResponse.text();
-    console.log('📄 Resposta:', responseText2.substring(0, 200));
-
-    const result = JSON.parse(responseText2);
-
-    if (result.secure_url) {
-      console.log('✅ Upload bem-sucedido! URL:', result.secure_url);
-      return res.status(200).json({ 
-        success: true,
-        url: result.secure_url 
-      });
-    } else {
-      console.log('❌ Upload falhou:', result);
-      throw new Error('Upload falhou: ' + JSON.stringify(result));
-    }
+    console.log('✅ Upload bem-sucedido! URL:', uploadResult.secure_url);
+    
+    return res.status(200).json({ 
+      success: true,
+      url: uploadResult.secure_url 
+    });
 
   } catch (error) {
     console.error('❌ ERRO:', error.message);

@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       `http://navarrocloud.ramo.com.br/files/api/Boleto?serial=${serial}&cnpj=${cnpj}`,
       {
         headers: {
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzAzMjExNDh9.OagZmilp2pbcepkBatCBIqKbChQ3vpEfZaS8Y8O4i-s'
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Mzg2ODM2MDV9.u-vW-P9P3FWz8kQGVZaXpMvW_yJMfLCRs8jR3K-VHQU'
         }
       }
     );
@@ -40,6 +40,8 @@ export default async function handler(req, res) {
     const arrayBuffer = await boletoPdf.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    console.log('✅ PDF baixado:', buffer.length, 'bytes');
+
     // 2. Criar assinatura para upload autenticado
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = `boleto_${serial}`;
@@ -47,42 +49,11 @@ export default async function handler(req, res) {
     const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
 
+    console.log('📝 Dados da assinatura:');
+    console.log('  - Public ID:', publicId);
+    console.log('  - Timestamp:', timestamp);
+    console.log('  - String to sign:', stringToSign);
+    console.log('  - Signature:', signature);
+
     // 3. Upload para Cloudinary
-    const formData = new FormData();
-    
-    formData.append('file', buffer, {
-      filename: `boleto_${serial}.pdf`,
-      contentType: 'application/pdf'
-    });
-    formData.append('api_key', apiKey);
-    formData.append('timestamp', timestamp.toString());
-    formData.append('signature', signature);
-    formData.append('public_id', publicId);
-
-    const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
-      {
-        method: 'POST',
-        body: formData,
-        headers: formData.getHeaders()
-      }
-    );
-
-    const result = await cloudinaryResponse.json();
-
-    if (result.secure_url) {
-      return res.status(200).json({ 
-        success: true,
-        url: result.secure_url 
-      });
-    } else {
-      throw new Error('Upload falhou: ' + JSON.stringify(result));
-    }
-
-  } catch (error) {
-    return res.status(500).json({ 
-      success: false,
-      error: error.message 
-    });
-  }
-}
+    const formData = new FormDat

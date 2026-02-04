@@ -16,6 +16,7 @@ export default async function handler(req, res) {
   const { serial, cnpj } = req.body;
 
   const cloudName = 'dvly2ldys';
+  const apiKey = '972741416413585';
   const uploadPreset = 'boleto_unsigned'; // PRESET UNSIGNED
 
   if (!serial || !cnpj) {
@@ -68,19 +69,21 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(await boletoPdf.arrayBuffer());
     console.log('✅ PDF baixado:', buffer.length, 'bytes');
 
-    // 3. Base64
-    const base64 = buffer.toString('base64');
-    const dataUri = `data:application/pdf;base64,${base64}`;
-
-    // 4. Upload UNSIGNED (sem assinatura)
-    console.log('☁️ Fazendo upload unsigned...');
+    // 3. Upload exatamente como o Postman
+    console.log('☁️ Upload para Cloudinary (formato Postman)...');
     const formData = new FormData();
-    formData.append('file', dataUri);
+    
+    // Anexa o buffer como arquivo
+    formData.append('file', buffer, {
+      filename: `boleto_${serial}.pdf`,
+      contentType: 'application/pdf'
+    });
     formData.append('upload_preset', uploadPreset);
     formData.append('public_id', `boleto_${serial}`);
+    formData.append('api_key', apiKey);
 
     const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
       {
         method: 'POST',
         body: formData,
@@ -90,7 +93,7 @@ export default async function handler(req, res) {
 
     const result = await cloudinaryResponse.json();
     console.log('📡 Status:', cloudinaryResponse.status);
-    console.log('📡 Response:', JSON.stringify(result));
+    console.log('📡 Response:', JSON.stringify(result).substring(0, 200));
 
     if (result.secure_url) {
       console.log('✅ Sucesso! URL:', result.secure_url);

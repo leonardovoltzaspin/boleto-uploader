@@ -48,6 +48,13 @@ export default async function handler(req, res) {
     const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
 
+    console.log('=== DEBUG UPLOAD ===');
+    console.log('Cloud Name:', cloudName);
+    console.log('API Key:', apiKey);
+    console.log('Public ID:', publicId);
+    console.log('Timestamp:', timestamp);
+    console.log('Signature:', signature);
+
     // 3. Upload para Cloudinary usando FormData com autenticação
     const formData = new FormData();
     
@@ -59,7 +66,8 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
-    formData.append('resource_type', 'raw');
+
+    console.log('URL do upload:', `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`);
 
     const cloudinaryResponse = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
@@ -70,7 +78,11 @@ export default async function handler(req, res) {
       }
     );
 
-    const result = await cloudinaryResponse.json();
+    const responseText = await cloudinaryResponse.text();
+    console.log('Resposta do Cloudinary (raw):', responseText);
+    
+    const result = JSON.parse(responseText);
+    console.log('Resposta do Cloudinary (parsed):', result);
 
     if (result.secure_url) {
       return res.status(200).json({ 
@@ -82,6 +94,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
+    console.error('Erro completo:', error);
     return res.status(500).json({ 
       success: false,
       error: error.message 

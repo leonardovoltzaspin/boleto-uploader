@@ -1,11 +1,11 @@
 {
-  "name": "boleto-uploader",
+  "name": "boleto-upload",
   "version": "1.0.0",
-  "dependencies": {
-    "form-data": "^4.0.0"
-  }
-},
-{
+  "description": "API para upload de boletos",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
     "form-data": "^4.0.0",
     "cloudinary": "^1.41.0"

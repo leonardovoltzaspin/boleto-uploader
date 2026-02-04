@@ -1,7 +1,7 @@
 async function run(serial, cnpj, cloudName, apiKey, apiSecret) {
   try {
     var response = await request.fetchAsync(
-      'https://sua-url.vercel.app/api/upload-boleto',
+      'https://boleto-uploader.vercel.app/api/upload-boleto',
       {
         method: 'POST',
         headers: {

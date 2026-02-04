@@ -15,8 +15,14 @@ export default async function handler(req, res) {
 
   const { serial, cnpj, cloudName, uploadPreset } = req.body;
 
+  // Debug: verificar o que está chegando
+  console.log('Parâmetros recebidos:', { serial, cnpj, cloudName, uploadPreset });
+
   if (!serial || !cnpj || !cloudName || !uploadPreset) {
-    return res.status(400).json({ error: 'Parâmetros faltando' });
+    return res.status(400).json({ 
+      error: 'Parâmetros faltando',
+      received: { serial, cnpj, cloudName, uploadPreset }
+    });
   }
 
   try {
@@ -37,7 +43,7 @@ export default async function handler(req, res) {
     const arrayBuffer = await boletoPdf.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 2. Upload para Cloudinary usando FormData (binário puro)
+    // 2. Upload para Cloudinary usando FormData
     const formData = new FormData();
     
     formData.append('file', buffer, {
@@ -45,7 +51,8 @@ export default async function handler(req, res) {
       contentType: 'application/pdf'
     });
     formData.append('upload_preset', uploadPreset);
-    formData.append('public_id', `boleto_${serial}`);
+    
+    console.log('Upload preset sendo enviado:', uploadPreset);
 
     const cloudinaryResponse = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
@@ -57,6 +64,8 @@ export default async function handler(req, res) {
     );
 
     const result = await cloudinaryResponse.json();
+    
+    console.log('Resposta do Cloudinary:', result);
 
     if (result.secure_url) {
       return res.status(200).json({ 
@@ -68,6 +77,7 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
+    console.error('Erro completo:', error);
     return res.status(500).json({ 
       success: false,
       error: error.message 

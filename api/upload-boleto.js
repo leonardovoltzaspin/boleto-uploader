@@ -18,8 +18,7 @@ export default async function handler(req, res) {
 
   if (!serial || !cnpj || !cloudName || !apiKey || !apiSecret) {
     return res.status(400).json({ 
-      error: 'Parâmetros faltando',
-      received: { serial, cnpj, cloudName, hasApiKey: !!apiKey, hasApiSecret: !!apiSecret }
+      error: 'Parâmetros faltando'
     });
   }
 
@@ -44,18 +43,13 @@ export default async function handler(req, res) {
     // 2. Criar assinatura para upload autenticado
     const timestamp = Math.round(new Date().getTime() / 1000);
     const publicId = `boleto_${serial}`;
+    const resourceType = 'raw';
     
-    const stringToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    // A assinatura DEVE incluir resource_type se ele for usado
+    const stringToSign = `public_id=${publicId}&resource_type=${resourceType}&timestamp=${timestamp}${apiSecret}`;
     const signature = crypto.createHash('sha1').update(stringToSign).digest('hex');
 
-    console.log('=== DEBUG UPLOAD ===');
-    console.log('Cloud Name:', cloudName);
-    console.log('API Key:', apiKey);
-    console.log('Public ID:', publicId);
-    console.log('Timestamp:', timestamp);
-    console.log('Signature:', signature);
-
-    // 3. Upload para Cloudinary usando FormData com autenticação
+    // 3. Upload para Cloudinary
     const formData = new FormData();
     
     formData.append('file', buffer, {
@@ -66,11 +60,10 @@ export default async function handler(req, res) {
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
     formData.append('public_id', publicId);
-
-    console.log('URL do upload:', `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`);
+    formData.append('resource_type', resourceType);
 
     const cloudinaryResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/upload`,
       {
         method: 'POST',
         body: formData,
@@ -78,11 +71,7 @@ export default async function handler(req, res) {
       }
     );
 
-    const responseText = await cloudinaryResponse.text();
-    console.log('Resposta do Cloudinary (raw):', responseText);
-    
-    const result = JSON.parse(responseText);
-    console.log('Resposta do Cloudinary (parsed):', result);
+    const result = await cloudinaryResponse.json();
 
     if (result.secure_url) {
       return res.status(200).json({ 
@@ -94,7 +83,6 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Erro completo:', error);
     return res.status(500).json({ 
       success: false,
       error: error.message 
